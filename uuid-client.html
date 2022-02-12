@@ -1,0 +1,496 @@
+<html>
+
+<head>
+    <style type="text/css">
+        /* 本ツールの説明 */
+        #tool-description_area {
+            color: #555;
+            font-size: 0.6em;
+            padding-left: 5px;
+        }
+
+        /* 出力欄 */
+        #output_area {
+            margin-top: 10px;
+        }
+
+        #control_area {
+            margin-top: 15px;
+        }
+
+        /* 基本操作 - ボタン */
+        #control_area button {
+            height: 30px;
+            min-width: 70px;
+        }
+
+        /* 基本操作 - 入力 */
+        #control_area input {
+            height: 30px;
+            border-style: none;
+            text-align: right;
+            width: 55px;
+        }
+
+        #switch-letter-case {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
+
+        #btnSwitchLetterCase {
+            min-width: 40px !important;
+            width: 40px;
+            padding-left: 2px;
+        }
+
+        #txtSwitchLetterCase1 {
+            font-size: 0.9em;
+        }
+
+        #txtSwitchLetterCase2 {
+            font-size: 0.9em;
+            color: #CC0000;
+            font-weight: bold;
+        }
+
+        /* ログメッセージ欄 */
+        #message_area {
+            min-height: 28px;
+            max-height: 28px;
+            overflow-y: scroll;
+            border-radius: 1px;
+        }
+
+        /* メッセージのヘッダ部(時間) */
+        #message_area .header {
+            display: inline-block;
+            width: 160px;
+            padding-left: 5px;
+            font-size: 0.8em;
+            text-align: center;
+        }
+
+        /* 情報メッセージ */
+        #message_area .info {
+            background-color: #C9EDDB;
+            color: #143D28;
+        }
+
+        /* エラーメッセージ */
+        #message_area .error {
+            background-color: #FECCCC;
+            color: #CC0000;
+        }
+
+        /* 警告メッセージ */
+        #message_area .warn {
+            background-color: #FFFFE0;
+            color: #FF6C00;
+        }
+
+        /* 補足メッセージ */
+        #message_area .remarks {
+            font-size: 0.8em;
+        }
+
+        /* UUID表示欄 */
+        #id_area {
+            position: relative;
+            padding: 10px;
+            margin-top: 5px;
+            font-family: 'Consolas';
+            border: solid #555;
+            border-radius: 10px;
+            overflow-y: auto;
+            max-height: calc(100% - 220px);
+        }
+
+        /* UUID表示欄 - ボタン */
+        #id_area button {
+            min-width: 60px;
+            margin-left: 2px;
+        }
+
+        /* UUID(1行) */
+        .id_area_row {
+            padding: 1px;
+            animation: emerge 300ms ease 0s 1 alternate none running;
+        }
+
+        .id_area_row:hover {
+            background-color: #DCEEDF;
+            font-weight: bold;
+        }
+
+        /* UUID */
+        .uuid {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+
+        .toggle-button {
+            border-radius: 100vh;
+            border-width: 1px;
+            border-style: solid;
+            border-color: #777;
+            vertical-align: middle;
+            text-align: left;
+            padding-left: 4px;
+        }
+
+        .toggle-button__ball {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border-style: solid;
+            border-width: 1px;
+            border-color: #777;
+            background-color: #777;
+            position: relative;
+        }
+
+        .toggle-button__on {
+            transform: translateX(20px);
+        }
+
+        .toggle-button__label_off {
+            color: #777 !important;
+            font-weight: normal !important;
+        }
+
+        @keyframes emerge {
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+    </style>
+    <script type="module">
+        import { v4 as uuidv4 } from 'https://jspm.dev/uuid';
+
+        const ATTR_UUID = 'data-uuid';
+        const ATTR_EXCLUDED_CLEAR_ELEMENT = 'data-excluded-clear';
+
+        let _upperCase = false;
+
+        const clearChildren = function (dom) {
+            while (dom.firstChild) {
+                clearChildren(dom.firstChild);
+                dom.removeChild(dom.firstChild);
+            }
+        }
+
+        const clearFrom = function (domParent, domChildren) {
+            for (let i = domChildren.length - 1; 0 <= i; i--) {
+                const child = domChildren.item(i);
+                clearChildren(child);
+                domParent.removeChild(child);
+            }
+        }
+
+        const paddingLeft = function (base, max, pad) {
+            let res = '' + base;
+            while (res.length < max) { res = pad + res; }
+            return res;
+        };
+
+        const getTimeStr = function (date) {
+            const iso = date.toISOString();
+            const s = iso.replace('T', ' ').replace(/\..+$/, '');
+            return s;
+        };
+
+        const clearIds = function () {
+            const domIdArea = document.getElementById('id_area');
+            const domIdRows = domIdArea.getElementsByClassName('id_area_row');
+            const domPHolders = domIdArea.getElementsByClassName('id_area_placeholder');
+            clearFrom(domIdArea, domIdRows);
+            clearFrom(domIdArea, domPHolders);
+
+            const domRow = document.createElement('div');
+            domRow.classList.add('id_area_placeholder');
+            const domTxt = document.createTextNode('ここに生成したUUIDが表示されます');
+            domRow.appendChild(domTxt);
+            domRow.style.color = '#555';
+
+            domIdArea.appendChild(domRow);
+        }
+
+        const deleteId = function (id) {
+            const domIdArea = document.getElementById('id_area');
+
+            const domIdRowList = domIdArea.getElementsByClassName('id_area_row');
+            for (let i = 0; i < domIdRowList.length; i++) {
+                const domIdRow = domIdRowList.item(i);
+
+                const uuid = domIdRow.getAttribute(ATTR_UUID);
+                if (uuid === id) {
+                    domIdArea.removeChild(domIdRow);
+                    appendInfo('1件削除しました。', id);
+                    break;
+                }
+            }
+
+            if (domIdArea.getElementsByClassName('id_area_row').length === 0) {
+                clearIds();
+            }
+        }
+
+        const addIds = function (ids) {
+            const domIdArea = document.getElementById('id_area');
+            const domPlaceholder = domIdArea.getElementsByClassName('id_area_placeholder');
+            if (domPlaceholder.length) {
+                clearFrom(domIdArea, domPlaceholder);
+            }
+
+            const domFrgm = document.createDocumentFragment();
+            for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+
+                const domRow = document.createElement('div');
+                domRow.classList.add('id_area_row');
+                domRow.setAttribute(ATTR_UUID, id);
+
+                const domUuid = document.createElement('span');
+                domUuid.classList.add('uuid');
+                domUuid.appendChild(document.createTextNode(id));
+                domRow.appendChild(domUuid);
+
+                const btnCopy = document.createElement('button');
+                btnCopy.appendChild(document.createTextNode('コピー'));
+                btnCopy.addEventListener('click', () => {
+                    const currentId = domRow.getAttribute(ATTR_UUID);
+                    copyClipBoard(currentId).then(() => {
+                        appendInfo('クリップボードに1件コピーしました。', currentId);
+                    }).catch((reason) => {
+                        appendError('コピーに失敗しました', reason.message);
+                    });
+                });
+                domRow.appendChild(btnCopy);
+
+                const btnDelRow = document.createElement('button');
+                btnDelRow.appendChild(document.createTextNode('削除'));
+                btnDelRow.addEventListener('click', () => {
+                    deleteId(domRow.getAttribute(ATTR_UUID));
+                });
+                domRow.appendChild(btnDelRow);
+
+                domFrgm.appendChild(domRow);
+            }
+
+            domIdArea.appendChild(domFrgm);
+        }
+
+        const changeIdsLetterCase = function () {
+            const domIdRows = document.getElementsByClassName('id_area_row');
+            for (const domRow of domIdRows) {
+                let uuid = domRow.getAttribute(ATTR_UUID);
+                if (_upperCase) {
+                    uuid = uuid.toUpperCase();
+                }
+                else {
+                    uuid = uuid.toLowerCase();
+                }
+                domRow.setAttribute(ATTR_UUID, uuid);
+
+                const domUuid = domRow.getElementsByClassName('uuid')[0];
+                clearChildren(domUuid);
+                domUuid.appendChild(document.createTextNode(uuid));
+            }
+        }
+
+        const clearMsg = function () {
+            const domMsg = document.getElementById('message_area');
+            clearChildren(domMsg);
+        }
+
+        const appendMsg = function (className, message, remarks) {
+            const timeStr = getTimeStr(new Date());
+            const domMsg = document.getElementById('message_area');
+            const domRow = document.createElement('div');
+
+            const domHead = document.createElement('span');
+            const domTime = document.createTextNode(`[${timeStr}]`);
+            domHead.classList.add('header');
+            domHead.appendChild(domTime);
+
+            const domTxtMsg = document.createTextNode(message);
+
+            domRow.classList.add('message');
+            domRow.classList.add(className);
+            domRow.appendChild(domHead);
+            domRow.appendChild(domTxtMsg);
+
+            if (remarks) {
+                const domRemarks = document.createElement('span');
+                const domTxtRemarks = document.createTextNode(`(${remarks})`);
+
+                domRemarks.classList.add('remarks');
+                domRemarks.appendChild(domTxtRemarks);
+                domRow.appendChild(domRemarks);
+            }
+
+            domMsg.prepend(domRow);
+            domMsg.scrollTop = 0;
+        }
+
+        const appendInfo = function (message, remarks) {
+            appendMsg('info', message, remarks);
+        }
+
+        const appendWarn = function (message, remarks) {
+            appendMsg('warn', message, remarks);
+        }
+
+        const appendError = function (message, remarks) {
+            appendMsg('error', message, remarks);
+        }
+
+        const generate = function (num) {
+            const ids = [];
+            for (let i = 0; i < num; i++) {
+                let id = uuidv4();
+                if (_upperCase) { id = id.toUpperCase(); }
+                ids.push(id);
+            }
+
+            addIds(ids);
+
+            const remarks = (num === 1) ? ids[0] : '';
+            appendInfo(`${num}件生成しました。`, remarks);
+        }
+
+        onload = function () {
+            const btnGenBatch = document.getElementById('btnGenBatch');
+            const btnDeleteAll = document.getElementById('btnDeleteAll');
+            const btnCopyAll = document.getElementById('btnCopyAll');
+            const btnLetterCase = document.getElementById('btnSwitchLetterCase');
+            const numIds = document.getElementById('numIds');
+            const domIdArea = document.getElementById('id_area');
+
+            clearMsg();
+            clearIds();
+
+            const domControl = document.getElementById('control_area');
+            for (const btn of domControl.getElementsByTagName('button')) {
+                btn.disabled = false;
+                console.log(btn);
+            }
+
+            btnGenBatch.addEventListener('click', function () {
+                const num = parseFloat(numIds.value ?? 0);
+                const max = parseFloat(numIds.max);
+
+                if (isNaN(num)) {
+                    appendError('数値を指定してください。', `${num}`);
+                    return;
+                }
+                if (max < num) {
+                    appendError(`${max}以内の値を指定してください。`, `${max} < ${num}`);
+                    return;
+                }
+                if (0 < num % 1) {
+                    appendError(`整数を指定してください。`, `${num}`);
+                    return;
+                }
+                if (num <= 0) {
+                    appendError(`0より大きい値を指定してください。`, `${num}`);
+                    return;
+                }
+
+                generate(num);
+            });
+
+            btnDeleteAll.addEventListener('click', function () {
+                clearIds();
+                appendInfo('UUIDを全削除しました');
+            })
+
+            btnCopyAll.addEventListener('click', function () {
+                const domIdRowList = document.getElementById('id_area').getElementsByClassName('id_area_row');
+
+                const ids = [];
+                for (let i = 0; i < domIdRowList.length; i++) {
+                    const id = domIdRowList.item(i).getAttribute(ATTR_UUID);
+                    ids.push(id);
+                }
+
+                if (domIdRowList.length) {
+                    copyClipBoard(ids.join('\n')).then(() => {
+                        appendInfo(`クリップボードに${ids.length}件コピーしました`);
+                    }).catch((reason) => {
+                        appendError(`コピーに失敗しました`, reason.message);
+                    });
+                } else {
+                    appendWarn(`コピーするUUIDがありません`);
+                    copyClipBoard('');
+                }
+            });
+
+            btnLetterCase.addEventListener('click', function (event) {
+                // 大文字小文字を変更
+                const ball = btnLetterCase.getElementsByClassName('toggle-button__ball')[0];
+                ball.classList.toggle('toggle-button__on');
+
+                _upperCase = !_upperCase;
+                changeIdsLetterCase();
+
+                const label1 = document.getElementById('txtSwitchLetterCase1');
+                const label2 = document.getElementById('txtSwitchLetterCase2');
+                label1.classList.toggle('toggle-button__label_off');
+                label2.classList.toggle('toggle-button__label_off');
+            });
+        }
+
+        const copyClipBoard = function (text) {
+            return navigator.clipboard.writeText(text);
+        }
+    </script>
+</head>
+
+<body>
+    <!-- ツールタイトル -->
+    <h2>UUID生成ツール</h2>
+    <!-- ツール説明 -->
+    <div id="tool-description_area">
+        本ツールは以下のサイトのuuidモジュールを使用してUUIDを生成します。<br>
+        モジュールをCDNから取得しているため本ツール起動時にインターネット接続が必要です。<br>
+        <div>https://github.com/uuidjs/uuid</div>
+    </div>
+
+    <!-- ボタン -->
+    <div id="control_area">
+        <input id="numIds" type="number" value="1" min="1" max="1000" step="1">件
+        <button id="btnGenBatch" disabled> 生成 </button>
+        <button id="btnDeleteAll">全削除</button>
+        <button id="btnCopyAll">クリップボードにコピー</button>
+    </div>
+
+    <!-- 結果 -->
+    <div id="output_area">
+        <!-- メッセージ -->
+        <div id="message_area">
+            <!-- 画面初期化に失敗した場合に表示されるメッセージ(初期化成功時に消去される) -->
+            <div class="error">
+                初期化に失敗しました。本ブラウザでは使用できないか、モジュール取得に失敗しました。
+            </div>
+        </div>
+        <!-- UUID一覧 -->
+        <div id="id_area">
+            <div id="switch-letter-case" data-excluded-clear="1">
+                <span id="txtSwitchLetterCase1">小文字</span>
+                <button id="btnSwitchLetterCase" class="toggle-button">
+                    <label class="toggle-button__ball"></label>
+                </button>
+                <span id="txtSwitchLetterCase2" class="toggle-button__label_off">大文字</span>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
